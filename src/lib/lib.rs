@@ -28,7 +28,7 @@ pub fn uncolorize_u8(color: &Rgb<u8>) -> u8 {
 }
 
 pub fn u16_from_i8(data: i8) -> u16 {
-    unsafe { std::mem::transmute::<i8, u8>(data) as u16 }
+    (data as u8) as u16
 }
 
 pub fn image_from_level(level: &Level, img: &mut RgbImage, y_offset: u32) {
