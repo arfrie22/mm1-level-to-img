@@ -134,7 +134,6 @@ pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
     x += 1;
 
     let time_limit = uncolorize_u16(img.get_pixel(x, y_offset));
-
     x += 1;
 
     let auto_scroll = AutoScroll::try_from(uncolorize_u8(img.get_pixel(x, y_offset)) >> 6).unwrap_or_default();
@@ -148,6 +147,7 @@ pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
         width |= (uncolorize_u8(img.get_pixel(x, y_offset)) as u32) << (i * 8);
         x += 1;
     }
+    width = width.min(240 * 16);
 
     let mut objects = Vec::new();
     const SCALE: u32 = 160;
@@ -198,6 +198,10 @@ pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
             };
 
             objects.push(object);
+
+            if objects.len() == 2600 {
+                break;
+            }
         }
     }
 
