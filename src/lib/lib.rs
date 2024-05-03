@@ -152,6 +152,10 @@ pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
     let mut objects = Vec::new();
     const SCALE: u32 = 160;
     for y in 0..27 {
+        if objects.len() == 2600 {
+            break;
+        }
+        
         for x in 0..240 {
             let x_pos = x * SCALE;
             let y_pos = y as i16 * SCALE as i16;

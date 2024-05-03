@@ -1,23 +1,14 @@
 use std::{io::{Error, Write}, path::{Path, PathBuf}};
 
-use image::RgbImage;
+use image::{GenericImageView, RgbImage};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use mm1_level_parser::level::Level;
 use mm1_level_to_img::level_from_img;
 
-fn create_image_from_course(path: &PathBuf) -> Result<Level, Error> {
-    let img = image::open(path).map_err(|e| Error::new(std::io::ErrorKind::Other, format!("Failed to open image: {}", e)),)?.to_rgb8();
-
+fn create_level_from_image(img: &RgbImage, output_path: &str) -> Result<Level, Error> {
     let level = level_from_img(&img, 0);
     let data = level.to_bytes().map_err(|e| Error::new(std::io::ErrorKind::Other, format!("Failed to convert level to bytes: {:?}", e)))?;
-
-    let output_path = path
-        .file_name()
-        .ok_or(Error::new(std::io::ErrorKind::Other, "No file name"))?
-        .to_str()
-        .unwrap()
-        .replace(".png", ".cdt");
 
     let output_path = Path::new("generate").join(output_path);
 
@@ -26,6 +17,33 @@ fn create_image_from_course(path: &PathBuf) -> Result<Level, Error> {
     
     Ok(level)
 }
+
+fn split_image(path: &PathBuf) -> Result<(), Error> {
+    let img = image::open(path).map_err(|e| Error::new(std::io::ErrorKind::Other, format!("Failed to open image: {}", e)),)?.to_rgb8();
+
+    let output_path = path
+        .file_name()
+        .ok_or(Error::new(std::io::ErrorKind::Other, "No file name"))?
+        .to_str()
+        .ok_or(Error::new(std::io::ErrorKind::Other, "Failed to convert file name to string"))?
+        .replace(".png", ".cdt");
+
+    let mut y = 0;
+    while y < img.height() {
+        let mut x = 0;
+        while x < img.width() {
+            let mut img = img.clone();
+            img = img.view(x, y, 256, 256).to_image();
+            let output_path = format!("{}.{}-{}.cdt", output_path, x/256, y/256);
+            create_level_from_image(&img, &output_path)?;
+            x += 256;
+        }
+        y += 256;
+    }
+
+    Ok(())
+}
+
 fn main() {
     std::fs::create_dir_all("generate").unwrap();
     let levels_dir = Path::new("output-2");
@@ -42,7 +60,7 @@ fn main() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_file() {
-            match create_image_from_course(&path) 
+            match split_image(&path) 
             {
                 Ok(_) => {},
                 Err(e) => {
