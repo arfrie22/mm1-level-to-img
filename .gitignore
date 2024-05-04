@@ -3,6 +3,8 @@
 /output
 /test
 /generate
+/output-2
+mario.tar.gz
 
 # General
 .DS_Store

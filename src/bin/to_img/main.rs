@@ -9,7 +9,7 @@ fn create_image_from_course(course: &Course) -> RgbImage {
     let mut img = RgbImage::new(256, 256);
 
     image_from_level(&course.level, &mut img, 0);
-    
+
     img
 }
 
@@ -50,9 +50,8 @@ fn main() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_file() {
-            match parse_archive(&path) 
-            {
-                Ok(_) => {},
+            match parse_archive(&path) {
+                Ok(_) => {}
                 Err(_) => {
                     continue;
                 }

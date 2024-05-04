@@ -1,9 +1,17 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
+use ahash::AHasher;
 use chrono::Local;
 use image::{Rgb, RgbImage};
-use mm1_level_parser::{level::{AutoScroll, CourseTheme, GameMode, Level}, objects::Object};
-use random_word::Lang;
+use mm1_level_parser::{
+    level::{AutoScroll, CourseTheme, GameMode, Level},
+    objects::Object,
+};
+use petname::{Generator, Petnames};
+use rand::{rngs::StdRng, SeedableRng};
 
 pub fn colorize_u16(data: u16) -> Rgb<u8> {
     let r = ((data & 0x3F) << 2) as u8;
@@ -103,13 +111,10 @@ pub fn image_from_level(level: &Level, img: &mut RgbImage, y_offset: u32) {
             colorize_u16((obj.object_flags & 0xFFFF) as u16),
         );
         let size = (u16_from_i8(obj.width) << 8) | u16_from_i8(obj.height);
-        img.put_pixel(
-            x,
-            y + y_offset + 1 + 27 * 5,
-            colorize_u16(size)
-        );
+        img.put_pixel(x, y + y_offset + 1 + 27 * 5, colorize_u16(size));
 
-        let child_obj_type = (u16_from_i8(obj.child_object_type) << 8) | u16_from_i8(obj.child_object_transformation_id);
+        let child_obj_type = (u16_from_i8(obj.child_object_type) << 8)
+            | u16_from_i8(obj.child_object_transformation_id);
         img.put_pixel(x, y + y_offset + 1 + 27 * 6, colorize_u16(child_obj_type));
         img.put_pixel(
             x,
@@ -127,16 +132,19 @@ pub fn image_from_level(level: &Level, img: &mut RgbImage, y_offset: u32) {
 pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
     let mut x = 0;
 
-    let game_mode = GameMode::try_from(uncolorize_u8(img.get_pixel(x, y_offset)) >> 6).unwrap_or_default();
+    let game_mode =
+        GameMode::try_from(uncolorize_u8(img.get_pixel(x, y_offset)) >> 6).unwrap_or_default();
     x += 1;
 
-    let course_theme = CourseTheme::try_from(uncolorize_u8(img.get_pixel(x, y_offset)) >> 5).unwrap_or_default();
+    let course_theme =
+        CourseTheme::try_from(uncolorize_u8(img.get_pixel(x, y_offset)) >> 5).unwrap_or_default();
     x += 1;
 
     let time_limit = uncolorize_u16(img.get_pixel(x, y_offset));
     x += 1;
 
-    let auto_scroll = AutoScroll::try_from(uncolorize_u8(img.get_pixel(x, y_offset)) >> 6).unwrap_or_default();
+    let auto_scroll =
+        AutoScroll::try_from(uncolorize_u8(img.get_pixel(x, y_offset)) >> 6).unwrap_or_default();
     x += 1;
 
     let flags = uncolorize_u8(img.get_pixel(x, y_offset));
@@ -155,11 +163,11 @@ pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
         if objects.len() == 2600 {
             break;
         }
-        
+
         for x in 0..240 {
             let x_pos = x * SCALE;
             let y_pos = y as i16 * SCALE as i16;
-            
+
             let obj_type = uncolorize_u16(img.get_pixel(x, y + y_offset + 1));
             let object_type = (obj_type >> 8) as i8;
             if object_type == 0 {
@@ -170,19 +178,21 @@ pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
             let z_position = (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27)) as u32) << 16
                 | (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 2)) as u32);
 
-            let object_flags = (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 3)) as u32) << 16
+            let object_flags = (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 3)) as u32)
+                << 16
                 | (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 4)) as u32);
 
             let size = uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 5));
-            let width = (size >> 8) as i8;  
+            let width = (size >> 8) as i8;
             let height = size as i8;
 
             let child_obj_type = uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 6));
             let child_object_type = (child_obj_type >> 8) as i8;
             let child_object_transformation_id = child_obj_type as i8;
 
-            let child_object_flags = (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 7)) as u32) << 16
-                | (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 8)) as u32);
+            let child_object_flags =
+                (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 7)) as u32) << 16
+                    | (uncolorize_u16(img.get_pixel(x, y + y_offset + 1 + 27 * 8)) as u32);
 
             let object = Object {
                 x_position: x_pos,
@@ -209,7 +219,17 @@ pub fn level_from_img(img: &RgbImage, y_offset: u32) -> Level {
         }
     }
 
-    let level_name = random_word::gen(Lang::En).to_owned() + "-" + random_word::gen(Lang::En);
+    let mut hasher = AHasher::default();
+    img.hash(&mut hasher);
+
+    let image_hash = hasher.finish();
+    let mut rng = StdRng::seed_from_u64(image_hash);
+    let level_name = loop {
+        let name = Petnames::default().generate(&mut rng, 2, "-").unwrap();
+        if name.len() <= 28 {
+            break name;
+        }
+    };
 
     Level {
         course_theme,
